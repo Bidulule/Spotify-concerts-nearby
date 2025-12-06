@@ -75,22 +75,20 @@ def main():
     bt = BandsintownClient()
 
 
-    artists_with_events = []
-    artists_without_events = []
+    artists_data = {"With_events":[], "Without_events":[]}
     total = len(sorted_artists)
     for i, (artist, count) in enumerate(sorted_artists, 1):
         print(f"  → ({i}/{total}) Recherche concerts de {artist}...", end="", flush=True)
-        events = bt.get_concerts(artist)
+        link, events = bt.get_link_and_concerts(artist)
         if events:
             print(f" trouvé {len(events)} date(s).")
-            artists_with_events.append((artist, {"count": count, "events": events}))
+            artists_data["With_events"].append((artist, {"count": count, 'link': link, "events": events}))
         else:
-            artists_without_events.append((artist, {"count": count}))
+            artists_data["Without_events"].append((artist, {"count": count, 'link': link, "events": events}))
             print(" aucun concert.")
         time.sleep(0.25)  # Limite les requêtes à l'API
     bt.quit()
-    # Génération de la page HTML
-    generate_html(artists_with_events)
+    generate_html(artists_data)
 
 
 if __name__ == "__main__":
