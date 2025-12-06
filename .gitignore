@@ -1,3 +1,7 @@
 .cache
 *.html
 *.json
+*.pyc
+*.html
+outputs/*
+venv/*
