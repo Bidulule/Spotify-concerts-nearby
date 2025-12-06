@@ -14,9 +14,9 @@ Ce script :
 from src.config import load_config
 from src.likes_db import load_likes_db, save_likes_db
 from src.spotify_client import get_spotify_client, fetch_new_liked_tracks, count_likes_per_artist
-from src.setlistfm import get_setlistfm_events
 from src.html_generator import generate_html
 import time
+from src.bandintown import BandsintownClient
 
 def main():
     """
@@ -50,34 +50,45 @@ def main():
     max_artists = len(artist_counts)
     default_top_n = config.get("top_artists", max_artists)
 
-    # Demande à l'utilisateur combien d'artistes analyser
-    try:
-        user_input = input(f"Combien d'artistes parmi les {max_artists} veux-tu analyser ? (Entrée = {default_top_n}) : ")
-        top_n = int(user_input.strip()) if user_input.strip() else default_top_n
-        top_n = max(1, min(top_n, max_artists))
-    except ValueError:
-        print(f"[!] Entrée invalide, utilisation de la valeur par défaut : {default_top_n}")
-        top_n = default_top_n
+    debug = True
+    if debug:
+        top_n = 1
+        sorted_artists = [("SOFIANE PAMART", 1), ("epic mountain", 0)]
+    else:
+        # Demande à l'utilisateur combien d'artistes analyser
+        try:
+            user_input = input(f"Combien d'artistes parmi les {max_artists} veux-tu analyser ? (Entrée = {default_top_n}) : ")
+            top_n = int(user_input.strip()) if user_input.strip() else default_top_n
+            top_n = max(1, min(top_n, max_artists))
+        except ValueError:
+            print(f"[!] Entrée invalide, utilisation de la valeur par défaut : {default_top_n}")
+            top_n = default_top_n
 
-    # Tri des artistes par nombre de morceaux likés
-    sorted_artists = sorted(artist_counts.items(), key=lambda x: -x[1])
-    if top_n:
-        sorted_artists = sorted_artists[:top_n]
-        print(f"[i] Recherche des concerts pour les {top_n} artistes les plus aimés.")
+        # Tri des artistes par nombre de morceaux likés
+        sorted_artists = sorted(artist_counts.items(), key=lambda x: -x[1])
+        if top_n:
+            sorted_artists = sorted_artists[:top_n]
+            print(f"[i] Recherche des concerts pour les {top_n} artistes les plus aimés.")
 
     # Récupération des concerts pour chaque artiste
+
+    bt = BandsintownClient()
+
+
     artists_with_events = []
+    artists_without_events = []
     total = len(sorted_artists)
     for i, (artist, count) in enumerate(sorted_artists, 1):
         print(f"  → ({i}/{total}) Recherche concerts de {artist}...", end="", flush=True)
-        events = get_setlistfm_events(artist, config["setlistfm"]["api_key"])
+        events = bt.get_concerts(artist)
         if events:
             print(f" trouvé {len(events)} date(s).")
             artists_with_events.append((artist, {"count": count, "events": events}))
         else:
+            artists_without_events.append((artist, {"count": count}))
             print(" aucun concert.")
         time.sleep(0.25)  # Limite les requêtes à l'API
-
+    bt.quit()
     # Génération de la page HTML
     generate_html(artists_with_events)
 
