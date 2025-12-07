@@ -5,6 +5,7 @@ Module bandsintown – version refactorisée avec une classe et un driver unique
 import os
 import json
 import time
+from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -110,26 +111,45 @@ class BandsintownClient:
 
     def _detect_shows_section(self, timeout=10):
         """Détecte si l'artiste a des concerts ou non."""
-        WebDriverWait(self.driver, timeout).until(
-            lambda d: d.find_elements(By.XPATH, "//*[contains(text(),'No upcoming shows')]")
-        )
-        WebDriverWait(self.driver, timeout).until(
-            lambda d: d.find_elements(By.XPATH, "//*[contains(text(),'all concerts')]")
-        )
-        for _ in range(timeout * 10):
-            no_shows = self._find_visible_element_by_text("No upcoming shows")
-            all_shows = self._find_visible_element_by_text("all concerts")
-            if no_shows:
-                return "no_shows", no_shows
-            if all_shows:
-                return "shows", all_shows
-            time.sleep(0.1)
-
+        try: 
+            WebDriverWait(self.driver, timeout).until(
+                lambda d: d.find_elements(By.XPATH, "//*[contains(text(),'No upcoming shows')]")
+            )
+            WebDriverWait(self.driver, timeout).until(
+                lambda d: d.find_elements(By.XPATH, "//*[contains(text(),'all concerts')]")
+            )
+            for _ in range(timeout * 10):
+                no_shows = self._find_visible_element_by_text("No upcoming shows")
+                all_shows = self._find_visible_element_by_text("all concerts")
+                if no_shows:
+                    return "no_shows", no_shows
+                if all_shows:
+                    return "shows", all_shows
+                time.sleep(0.1)
+        except Exception as e:
+            print("[!] Impossible de détecter la section concerts :", e)
         raise TimeoutError("Impossible de détecter la section concerts.")
 
     def _safe_click(self, element):
         self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
         self.driver.execute_script("arguments[0].click();", element)
+
+
+    def _extract_date(self, block):
+        month = block.find_element(
+            By.XPATH,
+            ".//div[" + " or ".join(f"text()='{m}'" for m in MONTHS) + "]"
+        ).text
+        day = block.find_element(
+            By.XPATH, f".//div[text()='{month}']/following-sibling::div[1]"
+        ).text
+        try:
+            year = block.find_element(
+                By.XPATH, f".//div[text()='{day}']/following-sibling::div[1]"
+            ).text
+        except Exception as e:
+            year = datetime.now().year
+        return f"{day} {month} {year}"
 
     def _parse_event_blocks(self, links):
         """Extrait date, salle, ville pour chaque évènement."""
@@ -137,20 +157,15 @@ class BandsintownClient:
         for link in links:
             try:
                 block = link.find_element(By.XPATH, "./ancestor::div[3]")
-                month = block.find_element(
-                    By.XPATH,
-                    ".//div[" + " or ".join(f"text()='{m}'" for m in MONTHS) + "]"
-                ).text
-                day = block.find_element(
-                    By.XPATH, f".//div[text()='{month}']/following-sibling::div[1]"
-                ).text
-                venue = link.find_element(By.XPATH, "./div[1]").text
-                city = link.find_element(By.XPATH, "./div[2]").text
+                date = self._extract_date(block)
+                venue = link.find_element(By.XPATH, "./div").text
+                city, country = link.find_element(By.XPATH, "./div[2]").text.split(", ")
                 url = link.get_attribute("href")
                 events.append({
-                    "date": f"{day} {month}",
+                    "date": date,
                     "venue": venue,
                     "city": city,
+                    "country" : country,
                     "url": url,
                 })
             except Exception as e:
@@ -165,7 +180,7 @@ class BandsintownClient:
         self.driver.get(artist_url)
         state, header = self._detect_shows_section()
         if state == "no_shows":
-            return None, []
+            return artist_url, []
         container = header.find_element(By.XPATH, "./ancestor::div[1]")
         WebDriverWait(self.driver, 10).until(
             lambda d: container.find_elements(By.XPATH, ".//a[contains(@href,'/e/')]")

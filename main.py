@@ -16,6 +16,7 @@ from src.likes_db import load_likes_db, save_likes_db
 from src.spotify_client import get_spotify_client, fetch_new_liked_tracks, count_likes_per_artist
 from src.html_generator import generate_html
 import time
+import webbrowser
 from src.bandintown import BandsintownClient
 
 def main():
@@ -50,7 +51,7 @@ def main():
     max_artists = len(artist_counts)
     default_top_n = config.get("top_artists", max_artists)
 
-    debug = True
+    debug = False
     if debug:
         top_n = 1
         sorted_artists = [("SOFIANE PAMART", 1), ("epic mountain", 0)]
@@ -82,13 +83,14 @@ def main():
         link, events = bt.get_link_and_concerts(artist)
         if events:
             print(f" trouvé {len(events)} date(s).")
-            artists_data["With_events"].append((artist, {"count": count, 'link': link, "events": events}))
+            artists_data["With_events"].append((artist, {"rank":i, "count": count, 'link': link, "events": events}))
         else:
-            artists_data["Without_events"].append((artist, {"count": count, 'link': link, "events": events}))
+            artists_data["Without_events"].append((artist, {"rank":i, "count": count, 'link': link, "events": events}))
             print(" aucun concert.")
-        time.sleep(0.25)  # Limite les requêtes à l'API
+        time.sleep(1)  # Limite les requêtes à l'API
     bt.quit()
-    generate_html(artists_data)
+    url = generate_html(artists_data)
+    webbrowser.open(url)
 
 
 if __name__ == "__main__":
